@@ -1,36 +1,36 @@
 <?php
 
-  /**
-   * AMQP protocol serialization/deserialization to/from wire format.
-   *
-   * http://code.google.com/p/php-amqplib/
-   * Vadim Zaliva <lord@crocodile.org>
-   *
-   *
-   * To understand all signed/unsinged and 32/64 bit madness in this
-   * code, please read first the following article:
-   *
-   * http://www.mysqlperformanceblog.com/2007/03/27/integers-in-php-running-with-scissors-and-portability/
-   */
+/**
+ * AMQP protocol serialization/deserialization to/from wire format.
+ *
+ * http://code.google.com/p/php-amqplib/
+ * Vadim Zaliva <lord@crocodile.org>
+ *
+ *
+ * To understand all signed/unsinged and 32/64 bit madness in this
+ * code, please read first the following article:
+ *
+ * http://www.mysqlperformanceblog.com/2007/03/27/integers-in-php-running-with-scissors-and-portability/
+ */
 
 require_once('hexdump.inc');
 
-  /**
-   * AMQP protocol decimal value.
-   *
-   * Values are represented as (n,e) pairs. The actual value
-   * is n * 10^(-e).
-   *
-   * From 0.8 spec: Decimal values are
-   * not intended to support floating point values, but rather
-   * business values such as currency rates and amounts. The
-   * 'decimals' octet is not signed.
-  */
+/**
+ * AMQP protocol decimal value.
+ *
+ * Values are represented as (n,e) pairs. The actual value
+ * is n * 10^(-e).
+ *
+ * From 0.8 spec: Decimal values are
+ * not intended to support floating point values, but rather
+ * business values such as currency rates and amounts. The
+ * 'decimals' octet is not signed.
+ */
 class AMQPDecimal
 {
     public function __construct($n, $e)
     {
-        if($e < 0)
+        if ($e < 0)
             throw new Exception("Decimal exponent value must be unsigned!");
         $this->n = $n;
         $this->e = $e;
@@ -38,7 +38,7 @@ class AMQPDecimal
 
     public function asBCvalue()
     {
-        return bcdiv($this->n, bcpow(10,$this->e));
+        return bcdiv($this->n, bcpow(10, $this->e));
     }
 }
 
@@ -53,7 +53,7 @@ class AMQPWriter
 
     private static function chrbytesplit($x, $bytes)
     {
-        return array_map('chr', AMQPWriter::bytesplit($x,$bytes));
+        return array_map('chr', AMQPWriter::bytesplit($x, $bytes));
     }
 
     /**
@@ -62,29 +62,26 @@ class AMQPWriter
      */
     private static function bytesplit($x, $bytes)
     {
-        if(is_int($x))
-        {
-            if($x<0)
+        if (is_int($x)) {
+            if ($x < 0)
                 $x = sprintf("%u", $x);
         }
-                
+
         $res = array();
-        for($i=0;$i<$bytes;$i++)
-        {
-            $b = bcmod($x,'256');
-            array_unshift($res,(int)$b);
-            $x=bcdiv($x,'256', 0);
+        for ($i = 0; $i < $bytes; $i++) {
+            $b = bcmod($x, '256');
+            array_unshift($res, (int)$b);
+            $x = bcdiv($x, '256', 0);
         }
-        if($x!=0)
+        if ($x != 0)
             throw new Exception("Value too big!");
         return $res;
     }
-    
+
     private function flushbits()
     {
-        if(count($this->bits))
-        {
-            $this->out .= implode("", array_map('chr',$this->bits));
+        if (count($this->bits)) {
+            $this->out .= implode("", array_map('chr', $this->bits));
             $this->bits = array();
             $this->bitcount = 0;
         }
@@ -113,19 +110,19 @@ class AMQPWriter
      */
     public function write_bit($b)
     {
-        if($b)
+        if ($b)
             $b = 1;
         else
             $b = 0;
         $shift = $this->bitcount % 8;
-        if($shift == 0)
+        if ($shift == 0)
             $last = 0;
         else
             $last = array_pop($this->bits);
-        
+
         $last |= ($b << $shift);
         array_push($this->bits, $last);
-            
+
         $this->bitcount += 1;
     }
 
@@ -134,7 +131,7 @@ class AMQPWriter
      */
     public function write_octet($n)
     {
-        if($n < 0 || $n > 255)
+        if ($n < 0 || $n > 255)
             throw new Exception('Octet out of range 0..255');
         $this->flushbits();
         $this->out .= chr($n);
@@ -145,7 +142,7 @@ class AMQPWriter
      */
     public function write_short($n)
     {
-        if($n < 0 ||  $n > 65535)
+        if ($n < 0 || $n > 65535)
             throw new Exception('Octet out of range 0..65535');
         $this->flushbits();
         $this->out .= pack('n', $n);
@@ -157,7 +154,7 @@ class AMQPWriter
     public function write_long($n)
     {
         $this->flushbits();
-        $this->out .= implode("", AMQPWriter::chrbytesplit($n,4));
+        $this->out .= implode("", AMQPWriter::chrbytesplit($n, 4));
     }
 
     private function write_signed_long($n)
@@ -174,7 +171,7 @@ class AMQPWriter
     public function write_longlong($n)
     {
         $this->flushbits();
-        $this->out .= implode("", AMQPWriter::chrbytesplit($n,8));
+        $this->out .= implode("", AMQPWriter::chrbytesplit($n, 8));
     }
 
     /**
@@ -184,7 +181,7 @@ class AMQPWriter
     public function write_shortstr($s)
     {
         $this->flushbits();
-        if(strlen($s) > 255)
+        if (strlen($s) > 255)
             throw new Exception('String too long');
         $this->write_octet(strlen($s));
         $this->out .= $s;
@@ -205,43 +202,37 @@ class AMQPWriter
     /**
      * Write unix time_t value as 64 bit timestamp.
      */
-   public function write_timestamp($v)
-   {
-       $this->write_longlong($v);
-   }
+    public function write_timestamp($v)
+    {
+        $this->write_longlong($v);
+    }
 
-   /**
-    * Write PHP array, as table. Input array format: keys are strings,
-    * values are (type,value) tuples.
-    */
+    /**
+     * Write PHP array, as table. Input array format: keys are strings,
+     * values are (type,value) tuples.
+     */
     public function write_table($d)
     {
         $this->flushbits();
         $table_data = new AMQPWriter();
-        foreach($d as $k=>$va)
-        {
-            list($ftype,$v) = $va;
+        foreach ($d as $k => $va) {
+            list($ftype, $v) = $va;
             $table_data->write_shortstr($k);
-            if($ftype=='S')
-            {
+            if ($ftype == 'S') {
                 $table_data->write('S');
                 $table_data->write_longstr($v);
-            } else if($ftype=='I')
-            {
+            } else if ($ftype == 'I') {
                 $table_data->write('I');
                 $table_data->write_signed_long($v);
-            } else if($ftype=='D')
-            {
+            } else if ($ftype == 'D') {
                 // 'D' type values are passed AMQPDecimal instances.
                 $table_data->write('D');
                 $table_data->write_octet($v->e);
                 $table_data->write_signed_long($v->n);
-            } else if($ftype=='T')
-            {
+            } else if ($ftype == 'T') {
                 $table_data->write('T');
                 $table_data->write_timestamp($v);
-            } else if($ftype=='F')
-            {
+            } else if ($ftype == 'F') {
                 $table_data->write('F');
                 $table_data->write_table($v);
             }
@@ -254,34 +245,32 @@ class AMQPWriter
 
 class AMQPReader
 {
-    public function __construct($str, $sock=NULL)
+    public function __construct($str, $sock = NULL)
     {
         $this->str = $str;
-        if ($sock !== NULL)
-        {
+        if ($sock !== NULL) {
             $this->sock = new BufferedInput($sock);
-        } else
-        {
+        } else {
             $this->sock = NULL;
         }
         $this->offset = 0;
 
         $this->bitcount = $this->bits = 0;
 
-        if(((int)4294967296)!=0)
+        if (((int)4294967296) != 0)
             $this->is64bits = true;
         else
             $this->is64bits = false;
 
-        if(!function_exists("bcmul"))
+        if (!function_exists("bcmul"))
             throw new Exception("'bc math' module required");
-            
+
         $this->buffer_read_timeout = 5; // in seconds
     }
 
     public function close()
     {
-        if($this->sock)
+        if ($this->sock)
             $this->sock->close();
     }
 
@@ -290,40 +279,35 @@ class AMQPReader
         $this->bitcount = $this->bits = 0;
         return $this->rawread($n);
     }
-    
+
     private function rawread($n)
     {
-        if($this->sock)
-        {
+        if ($this->sock) {
             $res = '';
             $read = 0;
-            
+
             $start = time();
-            while($read < $n && !feof($this->sock->real_sock()) &&
-                  (false !== ($buf = fread($this->sock->real_sock(), $n - $read))))
-            {
-                if ($buf == '')
-                {
+            while ($read < $n && !feof($this->sock->real_sock()) &&
+                (false !== ($buf = fread($this->sock->real_sock(), $n - $read)))) {
+                if ($buf == '') {
                     usleep(100);
-                }
-                else
-                    $start = time();                
-                    
+                } else
+                    $start = time();
+
                 $read += strlen($buf);
                 $res .= $buf;
             }
 
-            if(strlen($res)!=$n)
+            if (strlen($res) != $n)
                 throw new Exception ("Error reading data. Recevived " .
-                                     strlen($res) . " instead of expected $n bytes");
+                    strlen($res) . " instead of expected $n bytes");
             $this->offset += $n;
-        } else
-        {
-            if(strlen($this->str) < $n)
+        } else {
+            if (strlen($this->str) < $n)
                 throw new Exception ("Error reading data. Requested $n bytes while string buffer has only " .
-                                     strlen($this->str));
-            $res = substr($this->str,0,$n);
-            $this->str = substr($this->str,$n);
+                    strlen($this->str));
+            $res = substr($this->str, 0, $n);
+            $this->str = substr($this->str, $n);
             $this->offset += $n;
         }
         return $res;
@@ -331,8 +315,7 @@ class AMQPReader
 
     public function read_bit()
     {
-        if(!$this->bitcount)
-        {
+        if (!$this->bitcount) {
             $this->bits = ord($this->rawread(1));
             $this->bitcount = 8;
         }
@@ -345,14 +328,14 @@ class AMQPReader
     public function read_octet()
     {
         $this->bitcount = $this->bits = 0;
-        list(,$res) = unpack('C', $this->rawread(1));
+        list(, $res) = unpack('C', $this->rawread(1));
         return $res;
     }
 
     public function read_short()
     {
         $this->bitcount = $this->bits = 0;
-        list(,$res) = unpack('n', $this->rawread(2));
+        list(, $res) = unpack('n', $this->rawread(2));
         return $res;
     }
 
@@ -369,23 +352,22 @@ class AMQPReader
      */
     public function read_php_int()
     {
-        list(,$res) = unpack('N', $this->rawread(4));
-        if($this->is64bits)
-        {
-            $sres = sprintf ( "%u", $res );
+        list(, $res) = unpack('N', $this->rawread(4));
+        if ($this->is64bits) {
+            $sres = sprintf("%u", $res);
             return (int)$sres;
         } else {
             return $res;
         }
     }
-    
+
     // PHP does not have unsigned 32 bit int,
     // so we return it as a string
     public function read_long()
     {
         $this->bitcount = $this->bits = 0;
-        list(,$res) = unpack('N', $this->rawread(4));
-        $sres = sprintf ( "%u", $res );
+        list(, $res) = unpack('N', $this->rawread(4));
+        $sres = sprintf("%u", $res);
         return $sres;
     }
 
@@ -394,7 +376,7 @@ class AMQPReader
         $this->bitcount = $this->bits = 0;
         // In PHP unpack('N') always return signed value,
         // on both 32 and 64 bit systems!
-        list(,$res) = unpack('N', $this->rawread(4));
+        list(, $res) = unpack('N', $this->rawread(4));
         return $res;
     }
 
@@ -408,10 +390,10 @@ class AMQPReader
         $lo = unpack('N', $this->rawread(4));
 
         // workaround signed/unsigned braindamage in php
-        $hi = sprintf ( "%u", $hi[1] );
-        $lo = sprintf ( "%u", $lo[1] );
- 
-        return bcadd(bcmul($hi, "4294967296" ), $lo);
+        $hi = sprintf("%u", $hi[1]);
+        $lo = sprintf("%u", $lo[1]);
+
+        return bcadd(bcmul($hi, "4294967296"), $lo);
     }
 
     /**
@@ -421,10 +403,10 @@ class AMQPReader
     public function read_shortstr()
     {
         $this->bitcount = $this->bits = 0;
-        list(,$slen) = unpack('C', $this->rawread(1));
+        list(, $slen) = unpack('C', $this->rawread(1));
         return $this->rawread($slen);
     }
-    
+
     /**
      * Read a string that's up to 2**32 bytes, the encoding
      * isn't specified in the AMQP spec, so just return it as
@@ -434,11 +416,11 @@ class AMQPReader
     {
         $this->bitcount = $this->bits = 0;
         $slen = $this->read_php_int();
-        if($slen<0)
+        if ($slen < 0)
             throw new Exception("Strings longer than supported on this platform");
         return $this->rawread($slen);
     }
-    
+
     /**
      * Read and AMQP timestamp, which is a 64-bit integer representing
      * seconds since the Unix epoch in 1-second resolution.
@@ -456,44 +438,40 @@ class AMQPReader
     {
         $this->bitcount = $this->bits = 0;
         $tlen = $this->read_php_int();
-        if($tlen<0)
+        if ($tlen < 0)
             throw new Exception("Table is longer than supported");
         $table_data = new AMQPReader($this->rawread($tlen));
         $result = array();
-        while($table_data->tell() < $tlen)
-        {
+        while ($table_data->tell() < $tlen) {
             $name = $table_data->read_shortstr();
             $ftype = $table_data->rawread(1);
-            if($ftype == 'S') {
+            if ($ftype == 'S') {
                 $val = $table_data->read_longstr();
-            } else if($ftype == 'I') {
+            } else if ($ftype == 'I') {
                 $val = $table_data->read_signed_long();
-            } else if($ftype == 'D')
-            {
+            } else if ($ftype == 'D') {
                 $e = $table_data->read_octet();
                 $n = $table_data->read_signed_long();
                 $val = new AMQPDecimal($n, $e);
-            } else if($ftype == 'T')
-            {
+            } else if ($ftype == 'T') {
                 $val = $table_data->read_timestamp();
-            } else if($ftype == 'F')
-            {
+            } else if ($ftype == 'F') {
                 $val = $table_data->read_table(); // recursion
             } else {
                 error_log("Usupported table field type $ftype");
                 $val = NULL;
             }
-            $result[$name] = array($ftype,$val);
+            $result[$name] = array($ftype, $val);
         }
         return $result;
     }
 
-    
+
     protected function tell()
     {
         return $this->offset;
     }
-    
+
 }
 
 
@@ -507,9 +485,9 @@ class GenericContent
         "dummy" => "shortstr"
     );
 
-    public function __construct($props, $prop_types=NULL)
+    public function __construct($props, $prop_types = NULL)
     {
-        if($prop_types)
+        if ($prop_types)
             $this->prop_types = $prop_types;
         else
             $this->prop_types = GenericContent::$PROPERTIES;
@@ -528,13 +506,13 @@ class GenericContent
      */
     public function get($name)
     {
-        if(array_key_exists($name,$this->properties))
+        if (array_key_exists($name, $this->properties))
             return $this->properties[$name];
-        
-        if(isset($this->delivery_info))
-            if(array_key_exists($name,$this->delivery_info))
+
+        if (isset($this->delivery_info))
+            if (array_key_exists($name, $this->delivery_info))
                 return $this->delivery_info[$name];
-        
+
         throw new Exception("No such property");
     }
 
@@ -551,27 +529,25 @@ class GenericContent
 
         // Read 16-bit shorts until we get one with a low bit set to zero
         $flags = array();
-        while(true)
-        {
+        while (true) {
             $flag_bits = $r->read_short();
             array_push($flags, $flag_bits);
-            if(($flag_bits & 1) == 0)
+            if (($flag_bits & 1) == 0)
                 break;
         }
 
         $shift = 0;
         $d = array();
-        foreach ($this->prop_types as $key => $proptype)
-        {
-            if($shift == 0) {
-                if(!$flags) {
+        foreach ($this->prop_types as $key => $proptype) {
+            if ($shift == 0) {
+                if (!$flags) {
                     break;
                 }
                 $flag_bits = array_shift($flags);
                 $shift = 15;
             }
-            if($flag_bits & (1 << $shift))
-                $d[$key] = call_user_func(array($r,"read_".$proptype));
+            if ($flag_bits & (1 << $shift))
+                $d[$key] = call_user_func(array($r, "read_" . $proptype));
             $shift -= 1;
         }
         $this->properties = $d;
@@ -589,34 +565,31 @@ class GenericContent
         $flag_bits = 0;
         $flags = array();
         $raw_bytes = new AMQPWriter();
-        foreach ($this->prop_types as $key => $proptype)
-        {
-            if(array_key_exists($key,$this->properties))
+        foreach ($this->prop_types as $key => $proptype) {
+            if (array_key_exists($key, $this->properties))
                 $val = $this->properties[$key];
             else
                 $val = NULL;
-            if($val != NULL)
-            {
-                if($shift == 0)
-                {
+            if ($val != NULL) {
+                if ($shift == 0) {
                     array_push($flags, $flag_bits);
                     $flag_bits = 0;
                     $shift = 15;
                 }
-                
+
                 $flag_bits |= (1 << $shift);
-                if($proptype != "bit")
+                if ($proptype != "bit")
                     call_user_func(array($raw_bytes, "write_" . $proptype),
-                                   $val);
+                        $val);
             }
             $shift -= 1;
         }
         array_push($flags, $flag_bits);
         $result = new AMQPWriter();
-        foreach($flags as $flag_bits)
+        foreach ($flags as $flag_bits)
             $result->write_short($flag_bits);
         $result->write($raw_bytes->getvalue());
-        
+
         return $result->getvalue();
     }
 }
@@ -629,37 +602,34 @@ class BufferedInput
 
         $this->sock = $sock;
         $this->reset("");
-        
+
     }
-    
+
     public function real_sock()
     {
         return $this->sock;
     }
-    
+
     public function read($n)
     {
-        if ($this->offset >= strlen($this->buffer))
-        {
-            if (!($rv = $this->populate_buffer()))
-            {
+        if ($this->offset >= strlen($this->buffer)) {
+            if (!($rv = $this->populate_buffer())) {
                 return $rv;
             }
         }
         return $this->read_buffer($n);
     }
-    
+
     public function close()
     {
         fclose($this->sock);
         $this->reset("");
     }
-    
+
     private function read_buffer($n)
     {
         $n = min($n, strlen($this->buffer) - $this->offset);
-        if ($n === 0)
-        {
+        if ($n === 0) {
             // substr("", 0, 0) => FALSE, which screws up read loops that are
             // expecting non-blocking reads to return "". This avoids that edge
             // case when the buffer is empty/used up.
@@ -669,30 +639,28 @@ class BufferedInput
         $this->offset += $n;
         return $block;
     }
-    
+
     private function reset($block)
     {
         $this->buffer = $block;
         $this->offset = 0;
     }
-    
+
     private function populate_buffer()
     {
-        if(feof($this->sock))
-        {
+        if (feof($this->sock)) {
             $this->reset("");
             return FALSE;
         }
-        
+
         $block = fread($this->sock, $this->block_size);
-        if ($block !== FALSE)
-        {
+        if ($block !== FALSE) {
             $this->reset($block);
             return TRUE;
-        } else
-        {
+        } else {
             return $block;
         }
     }
 }
+
 ?>

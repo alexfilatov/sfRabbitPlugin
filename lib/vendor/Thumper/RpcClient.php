@@ -33,8 +33,9 @@
  */
 namespace Thumper;
 
-use \Thumper\BaseConsumer;
-use \Exception;
+use \PhpAmqpLib\Message\AMQPMessage;
+use \Thumper\BaseAmqp;
+use \InvalidArgumentException;
 
 /**
  *
@@ -43,39 +44,69 @@ use \Exception;
  * @category   Thumper
  * @package    Thumper
  */
-class Consumer extends BaseConsumer
+class RpcClient extends BaseAmqp
 {
-    public $consumed = 0;
+    protected $requests = 0;
+    protected $replies = array();
+    protected $queueName;
 
-    public function consume($msgAmount)
+    public function initClient()
     {
-        $this->target = $msgAmount;
+        list($this->queueName, , ) = $this->ch->queue_declare(
+            '',
+            false,
+            false,
+            true,
+            true
+        );
+    }
 
-        $this->setUpConsumer();
+    public function addRequest(
+        $msgBody,
+        $server,
+        $requestId = null,
+        $routingKey = ''
+    ) {
+        if (empty($requestId)) {
+            throw new InvalidArgumentException("You must provide a $requestId");
+        }
 
-        while (count($this->ch->callbacks)) {
+        $msg = new AMQPMessage(
+            $msgBody,
+            array(
+                'content_type' => 'text/plain',
+                'reply_to' => $this->queueName,
+                'correlation_id' => $requestId
+            )
+        );
+
+        $this->ch->basic_publish($msg, $server . '-exchange', $routingKey);
+
+        $this->requests++;
+    }
+
+    public function getReplies()
+    {
+        $this->ch->basic_consume(
+            $this->queueName,
+            $this->queueName,
+            false,
+            true,
+            false,
+            false,
+            array($this, 'processMessage')
+        );
+
+        while (count($this->replies) < $this->requests) {
             $this->ch->wait();
         }
+
+        $this->ch->basic_cancel($this->queueName);
+        return $this->replies;
     }
 
     public function processMessage($msg)
     {
-        try {
-            call_user_func($this->callback, $msg->body);
-            $msg->delivery_info['channel']
-                ->basic_ack($msg->delivery_info['delivery_tag']);
-            $this->consumed++;
-            $this->maybeStopConsumer($msg);
-        } catch (Exception $e) {
-            throw $e;
-        }
-    }
-
-    protected function maybeStopConsumer($msg)
-    {
-        if ($this->consumed == $this->target) {
-            $msg->delivery_info['channel']
-                ->basic_cancel($msg->delivery_info['consumer_tag']);
-        }
+        $this->replies[$msg->get('correlation_id')] = $msg->body;
     }
 }

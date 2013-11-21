@@ -2,7 +2,7 @@
 
 class sfRabbitPluginConfiguration extends sfPluginConfiguration
 {
-  public function initialize()
-  {
-  }
+    public function initialize()
+    {
+    }
 }

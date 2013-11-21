@@ -1,152 +1,159 @@
 <?php
 
-class sfRabbit {
+class sfRabbit
+{
 
-	protected static function getConnectionParams($name) {
-		$config = sfConfig::get('app_sfRabbitPlugin_connections');
+    protected static function getConnectionParams($name)
+    {
+        $config = sfConfig::get('app_sfRabbitPlugin_connections');
 
-		if (empty($config[$name]) or !$config = $config[$name]) {
-			throw new Exception(sprintf('There is no rabbitmq connection with "%s" name in config', $name));
-		}
+        if (empty($config[$name]) or !$config = $config[$name]) {
+            throw new Exception(sprintf('There is no rabbitmq connection with "%s" name in config', $name));
+        }
 
-		if (empty($config['host'])) {
-			throw new Exception(sprintf('%s rabbitmq connection must have configured host', $name));
-		}
-		if (empty($config['user'])) {
-			throw new Exception(sprintf('%s rabbitmq connection must have configured user', $name));
-		}
-		if (!isset($config['password'])) {
-			throw new Exception(sprintf('%s rabbitmq connection must have configured password', $name));
-		}
+        if (empty($config['host'])) {
+            throw new Exception(sprintf('%s rabbitmq connection must have configured host', $name));
+        }
+        if (empty($config['user'])) {
+            throw new Exception(sprintf('%s rabbitmq connection must have configured user', $name));
+        }
+        if (!isset($config['password'])) {
+            throw new Exception(sprintf('%s rabbitmq connection must have configured password', $name));
+        }
 
-		return array(
-			'host' => $config['host'],
-			'port' => empty($config['port']) ? 5672 : $config['port'],
-			'user' => $config['user'],
-			'password' => $config['password'],
-			'vhost' => isset($config['vhost']) ? $config['vhost'] : '/'
-		);
-	}
+        return array(
+            'host' => $config['host'],
+            'port' => empty($config['port']) ? 5672 : $config['port'],
+            'user' => $config['user'],
+            'password' => $config['password'],
+            'vhost' => isset($config['vhost']) ? $config['vhost'] : '/'
+        );
+    }
 
-	public static function getProducer($name) {
-		$config = sfConfig::get('app_sfRabbitPlugin_producers');
+    public static function getProducer($name)
+    {
+        $config = sfConfig::get('app_sfRabbitPlugin_producers');
 
-		if (empty($config[$name]) or !$config = $config[$name]) {
-			throw new Exception(sprintf('There is no rabbitmq producer with "%s" name in config', $name));
-		}
+        if (empty($config[$name]) or !$config = $config[$name]) {
+            throw new Exception(sprintf('There is no rabbitmq producer with "%s" name in config', $name));
+        }
 
-		$con_name = (empty($config['connection'])) ? ('default') : ($config['connection']);
-		$con_params = self::getConnectionParams($con_name);
+        $con_name = (empty($config['connection'])) ? ('default') : ($config['connection']);
+        $con_params = self::getConnectionParams($con_name);
 
-		$producer = new Producer($con_params['host'], $con_params['port'], $con_params['user'], $con_params['password'], $con_params['vhost']);
+        $producer = new Producer($con_params['host'], $con_params['port'], $con_params['user'], $con_params['password'], $con_params['vhost']);
 
-		$exchange_options = empty($config['exchange_options']) ? array() : $config['exchange_options'];
-		$producer->setExchangeOptions($exchange_options);
+        $exchange_options = empty($config['exchange_options']) ? array() : $config['exchange_options'];
+        $producer->setExchangeOptions($exchange_options);
 
-		return $producer;
-	}
+        return $producer;
+    }
 
-	public static function getConsumer($name) {
-		$config = sfConfig::get('app_sfRabbitPlugin_consumers');
-		if (empty($config[$name]) or !$config = $config[$name]) {
-			throw new Exception(sprintf('There is no rabbitmq consumers with "%s" name in config', $name));
-		}
+    public static function getConsumer($name)
+    {
+        $config = sfConfig::get('app_sfRabbitPlugin_consumers');
+        if (empty($config[$name]) or !$config = $config[$name]) {
+            throw new Exception(sprintf('There is no rabbitmq consumers with "%s" name in config', $name));
+        }
 
-		$con_name = (empty($config['connection'])) ? ('default') : ($config['connection']);
-		$con_params = self::getConnectionParams($con_name);
+        $con_name = (empty($config['connection'])) ? ('default') : ($config['connection']);
+        $con_params = self::getConnectionParams($con_name);
 
-		$consumer = new Consumer($con_params['host'], $con_params['port'], $con_params['user'], $con_params['password'], $con_params['vhost']);
+        $consumer = new Consumer($con_params['host'], $con_params['port'], $con_params['user'], $con_params['password'], $con_params['vhost']);
 
-		$exchange_options = empty($config['exchange_options']) ? array() : $config['exchange_options'];
-		$consumer->setExchangeOptions($exchange_options);
+        $exchange_options = empty($config['exchange_options']) ? array() : $config['exchange_options'];
+        $consumer->setExchangeOptions($exchange_options);
 
-		$queue_options = empty($config['queue_options']) ? array() : $config['queue_options'];
-		$consumer->setQueueOptions($queue_options);
+        $queue_options = empty($config['queue_options']) ? array() : $config['queue_options'];
+        $consumer->setQueueOptions($queue_options);
 
-		if (!empty($config['callback'])) {
-			$consumer->setCallback(array($config['callback'], 'execute'));
-		}
+        if (!empty($config['callback'])) {
+            $consumer->setCallback(array($config['callback'], 'execute'));
+        }
 
-		if (!empty($config['routing_key'])) {
-			$consumer->setRoutingKey($config['routing_key']);
-		}
+        if (!empty($config['routing_key'])) {
+            $consumer->setRoutingKey($config['routing_key']);
+        }
 
-		return $consumer;
-	}
+        return $consumer;
+    }
 
-	public static function getAnonConsumer($name) {
-		$config = sfConfig::get('app_sfRabbitPlugin_anon_consumers');
+    public static function getAnonConsumer($name)
+    {
+        $config = sfConfig::get('app_sfRabbitPlugin_anon_consumers');
 
-		if (empty($config[$name]) or !$config = $config[$name]) {
-			throw new Exception(sprintf('There is no rabbitmq anon consumers with "%s" name in config', $name));
-		}
+        if (empty($config[$name]) or !$config = $config[$name]) {
+            throw new Exception(sprintf('There is no rabbitmq anon consumers with "%s" name in config', $name));
+        }
 
-		$con_name = (empty($config['connection'])) ? ('default') : ($config['connection']);
-		$con_params = self::getConnectionParams($con_name);
+        $con_name = (empty($config['connection'])) ? ('default') : ($config['connection']);
+        $con_params = self::getConnectionParams($con_name);
 
-		$consumer = new AnonConsumer($con_params['host'], $con_params['port'], $con_params['user'], $con_params['password'], $con_params['vhost']);
+        $consumer = new AnonConsumer($con_params['host'], $con_params['port'], $con_params['user'], $con_params['password'], $con_params['vhost']);
 
-		$exchange_options = empty($config['exchange_options']) ? array() : $config['exchange_options'];
-		$consumer->setExchangeOptions($exchange_options);
+        $exchange_options = empty($config['exchange_options']) ? array() : $config['exchange_options'];
+        $consumer->setExchangeOptions($exchange_options);
 
-		if (!empty($config['callback'])) {
-			$callback = $config['callback'];
-			if (!is_array($callback)) {
-				$callback = array($callback, 'execute');
-			}
-			$consumer->setCallback($callback);
-		}
+        if (!empty($config['callback'])) {
+            $callback = $config['callback'];
+            if (!is_array($callback)) {
+                $callback = array($callback, 'execute');
+            }
+            $consumer->setCallback($callback);
+        }
 
 
-		if (!empty($config['routing_key'])) {
-		
-			$consumer->setRoutingKey($config['routing_key']);
-		}
+        if (!empty($config['routing_key'])) {
 
-		return $consumer;
-	}
+            $consumer->setRoutingKey($config['routing_key']);
+        }
 
-	public static function getRpcClient($name) {
-		$config = sfConfig::get('app_sfRabbitPlugin_rpc_clients');
+        return $consumer;
+    }
 
-		if (empty($config[$name]) or !$config = $config[$name]) {
-			throw new Exception(sprintf('There is no rabbitmq rpc client with "%s" name in config', $name));
-		}
+    public static function getRpcClient($name)
+    {
+        $config = sfConfig::get('app_sfRabbitPlugin_rpc_clients');
 
-		$con_name = (empty($config['connection'])) ? ('default') : ($config['connection']);
-		$con_params = self::getConnectionParams($con_name);
+        if (empty($config[$name]) or !$config = $config[$name]) {
+            throw new Exception(sprintf('There is no rabbitmq rpc client with "%s" name in config', $name));
+        }
 
-		$client = new AmqpRpcClient($con_params['host'], $con_params['port'], $con_params['user'], $con_params['password'], $con_params['vhost']);
-		$client->initClient();
+        $con_name = (empty($config['connection'])) ? ('default') : ($config['connection']);
+        $con_params = self::getConnectionParams($con_name);
 
-		return $client;
-	}
+        $client = new AmqpRpcClient($con_params['host'], $con_params['port'], $con_params['user'], $con_params['password'], $con_params['vhost']);
+        $client->initClient();
 
-	public static function getRpcServer($name) {
-		$config = sfConfig::get('app_sfRabbitPlugin_rpc_clients');
+        return $client;
+    }
 
-		if (empty($config[$name]) or !$config = $config[$name]) {
-			throw new Exception(sprintf('There is no rabbitmq rpc server with "%s" name in config', $name));
-		}
+    public static function getRpcServer($name)
+    {
+        $config = sfConfig::get('app_sfRabbitPlugin_rpc_clients');
 
-		if (empty($config['callback'])) {
-			throw new Exception(sprintf('Callback must be set for rabbitmq rpc server with "%s" name', $name));
-		}
+        if (empty($config[$name]) or !$config = $config[$name]) {
+            throw new Exception(sprintf('There is no rabbitmq rpc server with "%s" name in config', $name));
+        }
 
-		$con_name = (empty($config['connection'])) ? ('default') : ($config['connection']);
-		$con_params = self::getConnectionParams($con_name);
+        if (empty($config['callback'])) {
+            throw new Exception(sprintf('Callback must be set for rabbitmq rpc server with "%s" name', $name));
+        }
 
-		$server = new AmqpRpcServer($con_params['host'], $con_params['port'], $con_params['user'], $con_params['password'], $con_params['vhost']);
-		$server->initServer($name);
+        $con_name = (empty($config['connection'])) ? ('default') : ($config['connection']);
+        $con_params = self::getConnectionParams($con_name);
 
-		$callback = $config['callback'];
-		if (!is_array($callback)) {
-			$callback = array($callback, 'execute');
-		}
-		$server->setCallback($callback);
-		$server->start();
+        $server = new AmqpRpcServer($con_params['host'], $con_params['port'], $con_params['user'], $con_params['password'], $con_params['vhost']);
+        $server->initServer($name);
 
-		return $server;
-	}
+        $callback = $config['callback'];
+        if (!is_array($callback)) {
+            $callback = array($callback, 'execute');
+        }
+        $server->setCallback($callback);
+        $server->start();
+
+        return $server;
+    }
 
 }

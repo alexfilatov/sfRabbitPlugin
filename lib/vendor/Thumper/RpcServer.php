@@ -33,6 +33,7 @@
  */
 namespace Thumper;
 
+use \PhpAmqpLib\Message\AMQPMessage;
 use \Thumper\BaseConsumer;
 use \Exception;
 
@@ -43,14 +44,18 @@ use \Exception;
  * @category   Thumper
  * @package    Thumper
  */
-class Consumer extends BaseConsumer
+class RpcServer extends BaseConsumer
 {
-    public $consumed = 0;
-
-    public function consume($msgAmount)
+    public function initServer($name)
     {
-        $this->target = $msgAmount;
+        $this->setExchangeOptions(
+            array('name' => $name . '-exchange', 'type' => 'direct')
+        );
+        $this->setQueueOptions(array('name' => $name . '-queue'));
+    }
 
+    public function start()
+    {
         $this->setUpConsumer();
 
         while (count($this->ch->callbacks)) {
@@ -61,21 +66,33 @@ class Consumer extends BaseConsumer
     public function processMessage($msg)
     {
         try {
-            call_user_func($this->callback, $msg->body);
-            $msg->delivery_info['channel']
-                ->basic_ack($msg->delivery_info['delivery_tag']);
-            $this->consumed++;
-            $this->maybeStopConsumer($msg);
+            $msg->delivery_info['channel']->basic_ack(
+                $msg->delivery_info['delivery_tag']
+            );
+            $result = call_user_func($this->callback, $msg->body);
+            $this->sendReply(
+                $result,
+                $msg->get('reply_to'),
+                $msg->get('correlation_id')
+            );
         } catch (Exception $e) {
-            throw $e;
+            $this->sendReply(
+                'error: ' . $e->getMessage(),
+                $msg->get('reply_to'),
+                $msg->get('correlation_id')
+            );
         }
     }
 
-    protected function maybeStopConsumer($msg)
+    protected function sendReply($result, $client, $correlationId)
     {
-        if ($this->consumed == $this->target) {
-            $msg->delivery_info['channel']
-                ->basic_cancel($msg->delivery_info['consumer_tag']);
-        }
+        $reply = new AMQPMessage(
+            $result,
+            array(
+                'content_type' => 'text/plain',
+                'correlation_id' => $correlationId
+            )
+        );
+        $this->ch->basic_publish($reply, '', $client);
     }
 }
